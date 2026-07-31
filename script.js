@@ -26,8 +26,8 @@ function showHome() {
   div.innerHTML = `
     <h2>このサイトの使い方</h2>
     <p style="line-height:1.8; margin-top:8px;">
-      上部のメニューからレッスンを選択すると、そのレッスンのプロンプト一覧が表示されます。<br>
-      各プロンプトの右下にある <strong>「コピー」</strong> ボタンを押すと、内容がクリップボードにコピーされます。<br>
+      上部のメニューからレッスンを選択すると、そのレッスンのプロンプト・コード一覧が表示されます。<br>
+      各項目の右下にある <strong>「コピー」</strong> ボタンを押すと、内容がクリップボードにコピーされます。<br>
       コピー済みのボタンは <strong>「コピーしました！」</strong> と表示され、どこまで進んだか確認できます。<br>
       ボタンを再度押すと、再びコピーが実行されます。
     </p>
@@ -43,7 +43,8 @@ function buildBlocks() {
     block.className = 'message-block';
 
     const heading = document.createElement('h2');
-    heading.textContent = `プロンプト ${i}`;
+    heading.id = `heading-${num}`;
+    heading.textContent = '読み込み中...';
 
     const textarea = document.createElement('textarea');
     textarea.id = `textarea-${num}`;
@@ -74,25 +75,43 @@ function buildBlocks() {
 function loadAllTexts(lesson) {
   for (let i = 1; i <= TOTAL; i++) {
     const num = String(i).padStart(2, '0');
-    const file = `${lesson}/msg${num}.txt`;
     const textarea = document.getElementById(`textarea-${num}`);
+    const heading = document.getElementById(`heading-${num}`);
+    const files = [
+      { path: `${lesson}/${num}prompt.txt`, label: `プロンプト ${i}` },
+      { path: `${lesson}/${num}code.txt`, label: `コード ${i}` },
+      { path: `${lesson}/msg${num}.txt`, label: `プロンプト ${i}` }
+    ];
     textarea.placeholder = '読み込み中...';
 
-    fetch(file, { cache: 'no-store' })
-      .then(res => {
-        if (!res.ok) throw new Error(`${file} が見つかりません`);
-        return res.text();
-      })
-      .then(text => {
+    loadTextFile(files)
+      .then(({ text, label }) => {
+        heading.textContent = label;
         textarea.value = text;
         textarea.style.height = 'auto';
         textarea.style.height = textarea.scrollHeight + 'px';
       })
       .catch(() => {
+        heading.textContent = `項目 ${i}`;
         textarea.value = '';
-        textarea.placeholder = `（${file} を読み込めませんでした）`;
+        textarea.placeholder = `（${files.map(file => file.path).join(' または ')} を読み込めませんでした）`;
       });
   }
+}
+
+function loadTextFile(files) {
+  const [file, ...remainingFiles] = files;
+
+  return fetch(file.path, { cache: 'no-store' })
+    .then(res => {
+      if (!res.ok) throw new Error(`${file.path} が見つかりません`);
+      return res.text();
+    })
+    .then(text => ({ text, label: file.label }))
+    .catch(() => {
+      if (remainingFiles.length === 0) throw new Error('ファイルが見つかりません');
+      return loadTextFile(remainingFiles);
+    });
 }
 
 function copyText(textarea, btn) {

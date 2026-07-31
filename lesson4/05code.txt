@@ -1,0 +1,454 @@
+﻿import time
+import math
+import board
+import busio
+import digitalio
+import usb_hid
+import displayio
+import terminalio
+
+import adafruit_displayio_ssd1306
+
+from adafruit_display_text import label
+from adafruit_hid.keyboard import Keyboard
+from adafruit_hid.keycode import Keycode
+
+# カレンダーアプリ 設定 テスタープログラム
+
+
+# =========================
+# キーボード設定
+# =========================
+
+keyboard = Keyboard(usb_hid.devices)
+
+
+# =========================
+# タクトスイッチ設定
+# =========================
+
+switch = digitalio.DigitalInOut(board.GP14)
+switch.direction = digitalio.Direction.INPUT
+switch.pull = digitalio.Pull.UP
+
+
+# =========================
+# OLED設定
+# =========================
+
+displayio.release_displays()
+
+# Picoの I2C0: SCL=GP7, SDA=GP6
+# frequency=400000 でI2C通信を高速化
+i2c = busio.I2C(
+    scl=board.GP7,
+    sda=board.GP6,
+    frequency=400000
+)
+
+# SSD1306 OLEDは多くの場合 0x3C
+display_bus = displayio.I2CDisplay(
+    i2c,
+    device_address=0x3C
+)
+
+# auto_refresh=False で自動更新を止める
+display = adafruit_displayio_ssd1306.SSD1306(
+    display_bus,
+    width=128,
+    height=64,
+    auto_refresh=False
+)
+
+screen = displayio.Group()
+display.show(screen)
+
+# ワイヤーフレーム表示用Bitmap
+wire_bitmap = displayio.Bitmap(128, 64, 2)
+
+wire_palette = displayio.Palette(2)
+wire_palette[0] = 0x000000
+wire_palette[1] = 0xFFFFFF
+
+wire_tilegrid = displayio.TileGrid(
+    wire_bitmap,
+    pixel_shader=wire_palette,
+    x=0,
+    y=0
+)
+
+# 通常の4桁表示用ラベル
+pin_label = label.Label(
+    terminalio.FONT,
+    text="----",
+    scale=2,
+    x=40,
+    y=32
+)
+
+# コンソール風オープニング・待機表示用ラベル
+console_label = label.Label(
+    terminalio.FONT,
+    text="",
+    scale=1,
+    x=0,
+    y=8
+)
+
+screen.append(wire_tilegrid)
+screen.append(console_label)
+screen.append(pin_label)
+
+# 起動直後はコンソール表示を使う
+wire_tilegrid.hidden = True
+pin_label.hidden = True
+console_label.hidden = False
+
+last_oled_text = None
+
+
+def show_oled(text):
+    global last_oled_text
+
+    # 通常表示モードにする
+    wire_tilegrid.hidden = True
+    console_label.hidden = True
+    pin_label.hidden = False
+
+    # 同じ内容なら再描画しない
+    if text == last_oled_text:
+        return
+
+    pin_label.text = text
+    last_oled_text = text
+
+    # 必要な時だけ更新する
+    display.refresh(minimum_frames_per_second=0)
+
+
+def show_console(lines):
+    # コンソール表示モードにする
+    wire_tilegrid.hidden = True
+    console_label.hidden = False
+    pin_label.hidden = True
+
+    console_label.x = 0
+    console_label.y = 8
+    console_label.text = "\n".join(lines)
+
+    display.refresh(minimum_frames_per_second=0)
+
+
+# =========================
+# ワイヤーフレーム3D表示
+# =========================
+
+def clear_wire_bitmap():
+    for y in range(64):
+        for x in range(128):
+            wire_bitmap[x, y] = 0
+
+
+def draw_pixel(x, y):
+    if 0 <= x < 128 and 0 <= y < 64:
+        wire_bitmap[x, y] = 1
+
+
+def draw_line(x0, y0, x1, y1):
+    x0 = int(x0)
+    y0 = int(y0)
+    x1 = int(x1)
+    y1 = int(y1)
+
+    dx = abs(x1 - x0)
+    dy = -abs(y1 - y0)
+
+    sx = 1 if x0 < x1 else -1
+    sy = 1 if y0 < y1 else -1
+
+    err = dx + dy
+
+    while True:
+        draw_pixel(x0, y0)
+
+        if x0 == x1 and y0 == y1:
+            break
+
+        e2 = 2 * err
+
+        if e2 >= dy:
+            err += dy
+            x0 += sx
+
+        if e2 <= dx:
+            err += dx
+            y0 += sy
+
+
+def rotate_point(x, y, z, ax, ay):
+    # X軸回転
+    cos_x = math.cos(ax)
+    sin_x = math.sin(ax)
+
+    y2 = y * cos_x - z * sin_x
+    z2 = y * sin_x + z * cos_x
+
+    # Y軸回転
+    cos_y = math.cos(ay)
+    sin_y = math.sin(ay)
+
+    x3 = x * cos_y + z2 * sin_y
+    z3 = -x * sin_y + z2 * cos_y
+
+    return x3, y2, z3
+
+
+def project_point(x, y, z):
+    distance = 4
+    scale = 34
+
+    factor = scale / (z + distance)
+
+    screen_x = 64 + x * factor
+    screen_y = 30 + y * factor
+
+    return screen_x, screen_y
+
+
+def show_wireframe_cube(angle, cursor_on=True):
+    wire_tilegrid.hidden = False
+    console_label.hidden = False
+    pin_label.hidden = True
+
+    clear_wire_bitmap()
+
+    vertices = [
+        (-1, -1, -1),
+        ( 1, -1, -1),
+        ( 1,  1, -1),
+        (-1,  1, -1),
+        (-1, -1,  1),
+        ( 1, -1,  1),
+        ( 1,  1,  1),
+        (-1,  1,  1),
+    ]
+
+    edges = [
+        (0, 1), (1, 2), (2, 3), (3, 0),
+        (4, 5), (5, 6), (6, 7), (7, 4),
+        (0, 4), (1, 5), (2, 6), (3, 7),
+    ]
+
+    points = []
+
+    for vertex in vertices:
+        x, y, z = vertex
+        rx, ry, rz = rotate_point(x, y, z, angle, angle * 0.7)
+        sx, sy = project_point(rx, ry, rz - 0.2)
+
+        # 少し上に寄せて、下段の文字とぶつからないようにする
+        points.append((sx, sy - 6))
+
+    for edge in edges:
+        start, end = edge
+        x0, y0 = points[start]
+        x1, y1 = points[end]
+        draw_line(x0, y0, x1, y1)
+
+    # 一番下にスタート表示
+    if cursor_on:
+        console_label.text = "Push Start > _"
+    else:
+        console_label.text = "Push Start >  "
+
+    console_label.x = 0
+    console_label.y = 58
+
+    display.refresh(minimum_frames_per_second=0)
+
+
+# =========================
+# オープニング・待機画面
+# =========================
+
+def opening_animation():
+    boot_lines = [
+        "KAWAHARA SYSTEM",
+        "BOOTING...",
+        "LOAD HID DRIVER",
+        "INIT USB DEVICE",
+        "INIT GPIO GP14",
+        "INIT I2C BUS",
+        "SCAN OLED 0x3C",
+        "LOAD CALENDAR TEST",
+        "CHECK MODULES",
+        "READY."
+    ]
+
+    visible_lines = []
+
+    for line in boot_lines:
+        visible_lines.append(line)
+
+        # 128x64 / terminalio scale=1 なら7行程度が見やすい
+        if len(visible_lines) > 7:
+            visible_lines.pop(0)
+
+        show_console(visible_lines)
+        time.sleep(0.18)
+
+    time.sleep(0.3)
+
+
+def wait_for_start():
+    angle = 0
+    cursor_on = True
+    last_blink_time = time.monotonic()
+
+    while True:
+        now = time.monotonic()
+
+        # アンダースコア点滅を少し早くする
+        # 0.25秒ごとにON/OFF
+        if now - last_blink_time >= 0.25:
+            last_blink_time = now
+            cursor_on = not cursor_on
+
+        # ボタンが押されるまでワイヤーフレームを回し続ける
+        show_wireframe_cube(angle, cursor_on)
+        angle += 0.16
+
+        # プルアップなので、押されると False
+        if switch.value is False:
+            time.sleep(0.05)  # チャタリング対策
+
+            if switch.value is False:
+                # 離されるまで待つ
+                while switch.value is False:
+                    time.sleep(0.01)
+
+                # 待機ループを抜ける
+                break
+
+        # 回転速度
+        time.sleep(0.04)
+
+
+# =========================
+# 数字キー対応表
+# =========================
+
+number_keys = {
+    "0": Keycode.ZERO,
+    "1": Keycode.ONE,
+    "2": Keycode.TWO,
+    "3": Keycode.THREE,
+    "4": Keycode.FOUR,
+    "5": Keycode.FIVE,
+    "6": Keycode.SIX,
+    "7": Keycode.SEVEN,
+    "8": Keycode.EIGHT,
+    "9": Keycode.NINE,
+}
+
+
+# =========================
+# カレンダー
+# =========================
+
+days_in_month = {
+    1: 31,
+    2: 29,
+    3: 31,
+    4: 30,
+    5: 31,
+    6: 30,
+    7: 31,
+    8: 31,
+    9: 30,
+    10: 31,
+    11: 30,
+    12: 31,
+}
+
+
+def make_4digit_code(number):
+    # 数字または文字列を4桁文字列にする
+    key_code = str(number)
+
+    # 4桁を超える場合は送信しない
+    if len(key_code) > 4:
+        return None
+
+    # CircuitPython 7.2.5では zfill() を使わず手動で0埋め
+    while len(key_code) < 4:
+        key_code = "0" + key_code
+
+    return key_code
+
+
+def check_stop():
+    # プルアップなので、押されると False
+    if switch.value is False:
+        time.sleep(0.03)  # チャタリング対策
+
+        if switch.value is False:
+            keyboard.release_all()
+            show_oled("STOP")
+
+            # 離されるまで待つ
+            while switch.value is False:
+                time.sleep(0.01)
+
+            raise SystemExit
+
+
+def send_data(number, update_oled=True):
+    key_code = make_4digit_code(number)
+
+    if key_code is None:
+        show_oled("ERR")
+        return
+
+    if update_oled:
+        show_oled(key_code)
+
+    # 1文字ずつキー入力
+    for digit in key_code:
+        check_stop()
+
+        keyboard.press(number_keys[digit])
+        keyboard.release_all()
+        time.sleep(0.02)
+
+    # 最後にEnter
+    check_stop()
+
+    keyboard.press(Keycode.ENTER)
+    keyboard.release_all()
+    time.sleep(0.05)
+
+    check_stop()
+
+
+# =========================
+# スイッチが押されるまで待機
+# =========================
+
+opening_animation()
+wait_for_start()
+
+
+# ★プログラムスタート
+
+for month in range(1, 13):
+    # show_oled(make_4digit_code(month * 100 + 1))
+
+    for day in range(1, days_in_month[month] + 1):
+        code = month * 100 + day
+
+        # キー送信時にOLEDも現在のコードへ更新する
+        send_data(code)
+
+
+
