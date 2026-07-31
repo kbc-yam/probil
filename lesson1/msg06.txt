@@ -1,0 +1,217 @@
+# テトリスデモ
+import random
+import tkinter as tk
+
+# ==========================================
+# 調整パラメータ (お好みに合わせて変更してください)
+# ==========================================
+BLOCK_SIZE = 30  # 1マスのピクセルサイズ (画面の大きさを変えたい時に変更)
+BOARD_WIDTH = 10  # フィールドの横マス数
+BOARD_HEIGHT = 20  # フィールドの縦マス数
+INITIAL_SPEED = 500  # 自然落下のスピード（ミリ秒単位：小さいほど高速・難易度アップ）
+# ==========================================
+
+# テトリミノの形状と色定義
+SHAPES = [
+    # I
+    {"shape": [[1, 1, 1, 1]], "color": "cyan"},
+    # O
+    {"shape": [[1, 1], [1, 1]], "color": "yellow"},
+    # T
+    {"shape": [[0, 1, 0], [1, 1, 1]], "color": "purple"},
+    # S
+    {"shape": [[0, 1, 1], [1, 1, 0]], "color": "green"},
+    # Z
+    {"shape": [[1, 1, 0], [0, 1, 1]], "color": "red"},
+    # J
+    {"shape": [[1, 0, 0], [1, 1, 1]], "color": "blue"},
+    # L
+    {"shape": [[0, 0, 1], [1, 1, 1]], "color": "orange"},
+]
+
+
+class TetrisGame:
+
+  def __init__(self, root):
+    self.root = root
+    self.root.title("Python Tkinter Tetris")
+    self.root.bind("<KeyPress>", self.handle_keypress)
+
+    # スコア表示ラベル
+    self.score = 0
+    self.score_label = tk.Label(
+        root, text=f"Score: {self.score}", font=("Arial", 14, "bold")
+    )
+    self.score_label.pack(pady=5)
+
+    # ゲーム画面描画用キャンバス
+    self.canvas = tk.Canvas(
+        root,
+        width=BOARD_WIDTH * BLOCK_SIZE,
+        height=BOARD_HEIGHT * BLOCK_SIZE,
+        bg="black",
+    )
+    self.canvas.pack()
+
+    # ゲームボードの状態 (0:空, 色名:ブロックあり)
+    self.board = [[0] * BOARD_WIDTH for _ in range(BOARD_HEIGHT)]
+
+    self.game_over = False
+    self.spawn_piece()
+    self.update_game()
+
+  def spawn_piece(self):
+    """新しいブロックを上部中央に出現させる"""
+    piece_data = random.choice(SHAPES)
+    self.current_shape = [row[:] for row in piece_data["shape"]]
+    self.current_color = piece_data["color"]
+    self.current_x = BOARD_WIDTH // 2 - len(self.current_shape[0]) // 2
+    self.current_y = 0
+
+    # 出現直後に衝突している場合はゲームオーバー
+    if self.check_collision(self.current_x, self.current_y, self.current_shape):
+      self.game_over = True
+
+  def check_collision(self, offset_x, offset_y, shape):
+    """指定した位置にブロックが衝突するか判定"""
+    for r_idx, row in enumerate(shape):
+      for c_idx, cell in enumerate(row):
+        if cell:
+          new_x = offset_x + c_idx
+          new_y = offset_y + r_idx
+          if (
+              new_x < 0
+              or new_x >= BOARD_WIDTH
+              or new_y >= BOARD_HEIGHT
+              or (new_y >= 0 and self.board[new_y][new_x])
+          ):
+            return True
+    return False
+
+  def merge_piece(self):
+    """着地したブロックをボードに固定する"""
+    for r_idx, row in enumerate(self.current_shape):
+      for c_idx, cell in enumerate(row):
+        if cell:
+          if self.current_y + r_idx >= 0:
+            self.board[self.current_y + r_idx][
+                self.current_x + c_idx
+            ] = self.current_color
+
+    # ライン消去処理
+    lines_to_clear = [
+        i for i, row in enumerate(self.board) if all(row != 0 for row in row)
+    ]
+    for row in lines_to_clear:
+      del self.board[row]
+      self.board.insert(0, [0] * BOARD_WIDTH)
+
+    # 消去ライン数に応じてスコア加算 (1列:100, 2列:300, 3列:500, 4列:800)
+    scores = {0: 0, 1: 100, 2: 300, 3: 500, 4: 800}
+    self.score += scores.get(len(lines_to_clear), 800)
+    self.score_label.config(text=f"Score: {self.score}")
+
+  def rotate_piece(self):
+    """ブロックを時計回りに90度回転"""
+    rotated = [
+        [self.current_shape[r][c] for r in range(len(self.current_shape) - 1, -1, -1)]
+        for c in range(len(self.current_shape[0]))
+    ]
+    if not self.check_collision(self.current_x, self.current_y, rotated):
+      self.current_shape = rotated
+
+  def handle_keypress(self, event):
+    """キー入力による操作"""
+    if self.game_over:
+      return
+
+    if event.keysym == "Left":
+      if not self.check_collision(
+          self.current_x - 1, self.current_y, self.current_shape
+      ):
+        self.current_x -= 1
+    elif event.keysym == "Right":
+      if not self.check_collision(
+          self.current_x + 1, self.current_y, self.current_shape
+      ):
+        self.current_x += 1
+    elif event.keysym == "Down":
+      if not self.check_collision(
+          self.current_x, self.current_y + 1, self.current_shape
+      ):
+        self.current_y += 1
+    elif event.keysym == "Up":
+      self.rotate_piece()
+    elif event.keysym == "space":
+      # スペースキーでハードドロップ（一番下まで一気に落とす）
+      while not self.check_collision(
+          self.current_x, self.current_y + 1, self.current_shape
+      ):
+        self.current_y += 1
+      self.lock_piece_and_spawn()
+
+    self.draw()
+
+  def update_game(self):
+    """一定時間ごとの自動落下処理"""
+    if not self.game_over:
+      if not self.check_collision(
+          self.current_x, self.current_y + 1, self.current_shape
+      ):
+        self.current_y += 1
+      else:
+        self.lock_piece_and_spawn()
+      self.draw()
+      self.root.after(INITIAL_SPEED, self.update_game)
+
+  def lock_piece_and_spawn(self):
+    """ブロックを固定し、次のブロックをスポーンする"""
+    self.merge_piece()
+    self.spawn_piece()
+
+  def draw(self):
+    """画面全体の描画更新"""
+    self.canvas.delete("all")
+
+    # 固定済みブロックの描画
+    for r_idx, row in enumerate(self.board):
+      for c_idx, color in enumerate(row):
+        if color:
+          self.draw_block(c_idx, r_idx, color)
+
+    # 操作中ブロックの描画
+    for r_idx, row in enumerate(self.current_shape):
+      for c_idx, cell in enumerate(row):
+        if cell:
+          self.draw_block(
+              self.current_x + c_idx,
+              self.current_y + r_idx,
+              self.current_color,
+          )
+
+    # ゲームオーバー時の表示
+    if self.game_over:
+      self.canvas.create_text(
+          BOARD_WIDTH * BLOCK_SIZE / 2,
+          BOARD_HEIGHT * BLOCK_SIZE / 2,
+          text="GAME OVER",
+          fill="white",
+          font=("Arial", 24, "bold"),
+      )
+
+  def draw_block(self, x, y, color):
+    """1マス分のブロックを描画するヘルパー"""
+    self.canvas.create_rectangle(
+        x * BLOCK_SIZE,
+        y * BLOCK_SIZE,
+        (x + 1) * BLOCK_SIZE,
+        (y + 1) * BLOCK_SIZE,
+        fill=color,
+        outline="gray",
+    )
+
+
+if __name__ == "__main__":
+  root = tk.Tk()
+  game = TetrisGame(root)
+  root.mainloop()

@@ -1,0 +1,88 @@
+import itertools
+
+# 入力
+numbers = [1, 2, 3, 4]
+
+# 演算子
+ops = ['+', '-', '*', '/']
+
+# 計算関数（ゼロ除算対策）
+def calc(a, b, op):
+    try:
+        if op == '+':
+            return a + b
+        elif op == '-':
+            return a - b
+        elif op == '*':
+            return a * b
+        elif op == '/':
+            return a / b
+    except ZeroDivisionError:
+        return None
+
+results = set()
+
+# 数字の順列
+for nums in itertools.permutations(numbers):
+    a, b, c, d = nums
+
+    # 演算子の組み合わせ
+    for op1 in ops:
+        for op2 in ops:
+            for op3 in ops:
+
+                # 5通りのカッコパターン
+
+                # 1. ((a op b) op c) op d
+                r1 = calc(a, b, op1)
+                if r1 is not None:
+                    r2 = calc(r1, c, op2)
+                    if r2 is not None:
+                        r3 = calc(r2, d, op3)
+                        if r3 is not None and abs(r3 - 10) < 1e-6:
+                            expr = f"(({a}{op1}{b}){op2}{c}){op3}{d}"
+                            results.add(expr)
+
+                # 2. (a op (b op c)) op d
+                r1 = calc(b, c, op2)
+                if r1 is not None:
+                    r2 = calc(a, r1, op1)
+                    if r2 is not None:
+                        r3 = calc(r2, d, op3)
+                        if r3 is not None and abs(r3 - 10) < 1e-6:
+                            expr = f"({a}{op1}({b}{op2}{c})){op3}{d}"
+                            results.add(expr)
+
+                # 3. a op ((b op c) op d)
+                r1 = calc(b, c, op2)
+                if r1 is not None:
+                    r2 = calc(r1, d, op3)
+                    if r2 is not None:
+                        r3 = calc(a, r2, op1)
+                        if r3 is not None and abs(r3 - 10) < 1e-6:
+                            expr = f"{a}{op1}(({b}{op2}{c}){op3}{d})"
+                            results.add(expr)
+
+                # 4. a op (b op (c op d))
+                r1 = calc(c, d, op3)
+                if r1 is not None:
+                    r2 = calc(b, r1, op2)
+                    if r2 is not None:
+                        r3 = calc(a, r2, op1)
+                        if r3 is not None and abs(r3 - 10) < 1e-6:
+                            expr = f"{a}{op1}({b}{op2}({c}{op3}{d}))"
+                            results.add(expr)
+
+                # 5. (a op b) op (c op d)
+                r1 = calc(a, b, op1)
+                r2 = calc(c, d, op3)
+                if r1 is not None and r2 is not None:
+                    r3 = calc(r1, r2, op2)
+                    if r3 is not None and abs(r3 - 10) < 1e-6:
+                        expr = f"({a}{op1}{b}){op2}({c}{op3}{d})"
+                        results.add(expr)
+
+# 出力
+print(f"{len(results)}個の解が見つかりました。\n")
+for expr in sorted(results):
+    print(expr)
