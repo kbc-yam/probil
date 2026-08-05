@@ -1,4 +1,4 @@
-﻿# 完成版コード
+﻿# 初期コード
 import time
 import math
 import board
@@ -442,8 +442,5 @@ wait_for_start()
 
 # ★プログラムスタート
 
-for month in range(1, 13):
-    for day in range(1, days_in_month[month] + 1):
-        code = month * 100 + day
-        send(code)
-
+send(1234)
+send(1111)
