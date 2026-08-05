@@ -119,6 +119,11 @@ textarea:focus {
   transition: background-color 0.2s, transform 0.1s;
 }
 
+.copy-btn-top {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
 .copy-icon {
   width: 16px;
   height: 16px;

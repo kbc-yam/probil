@@ -27,7 +27,7 @@ function showHome() {
     <h2>このサイトの使い方</h2>
     <p style="line-height:1.8; margin-top:8px;">
       上部のメニューからレッスンを選択すると、そのレッスンのプロンプト・コード一覧が表示されます。<br>
-      各項目の右下にある <strong>「コピー」</strong> ボタンを押すと、内容がクリップボードにコピーされます。<br>
+      各項目の上部にある <strong>「コピー」</strong> ボタンを押すと、内容がクリップボードにコピーされます。<br>
       コピー済みのボタンは <strong>「コピーしました！」</strong> と表示され、どこまで進んだか確認できます。<br>
       ボタンを再度押すと、再びコピーが実行されます。
     </p>
@@ -50,26 +50,32 @@ function buildBlocks() {
     textarea.id = `textarea-${num}`;
     textarea.placeholder = '読み込み中...';
 
-    const btn = document.createElement('button');
-    btn.className = 'copy-btn';
-    const icon = document.createElement('img');
-    icon.src = 'copy.png';
-    icon.alt = '';
-    icon.className = 'copy-icon';
-
-    const label = document.createElement('span');
-    label.className = 'copy-label';
-    label.textContent = 'コピー';
-
-    btn.appendChild(icon);
-    btn.appendChild(label);
-    btn.addEventListener('click', () => copyText(textarea, btn));
+    const topBtn = createCopyButton(textarea, 'copy-btn-top');
 
     block.appendChild(heading);
+    block.appendChild(topBtn);
     block.appendChild(textarea);
-    block.appendChild(btn);
     list.appendChild(block);
   }
+}
+
+function createCopyButton(textarea, additionalClass = '') {
+  const btn = document.createElement('button');
+  btn.className = `copy-btn ${additionalClass}`.trim();
+
+  const icon = document.createElement('img');
+  icon.src = 'copy.png';
+  icon.alt = '';
+  icon.className = 'copy-icon';
+
+  const label = document.createElement('span');
+  label.className = 'copy-label';
+  label.textContent = 'コピー';
+
+  btn.appendChild(icon);
+  btn.appendChild(label);
+  btn.addEventListener('click', () => copyText(textarea, btn));
+  return btn;
 }
 
 function loadAllTexts(lesson) {
