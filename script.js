@@ -1,5 +1,6 @@
 const TOTAL = 10;
 const list = document.getElementById('message-list');
+const sectionLinks = document.getElementById('section-links');
 
 // ナビゲーションボタンのクリック処理
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -13,10 +14,25 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 function showLesson(lesson) {
   list.innerHTML = '';
   if (lesson === 'home') {
+    sectionLinks.innerHTML = '';
     showHome();
   } else {
+    buildSectionLinks();
     buildBlocks();
     loadAllTexts(lesson);
+  }
+}
+
+function buildSectionLinks() {
+  sectionLinks.innerHTML = '';
+
+  for (let i = 1; i <= TOTAL; i++) {
+    const num = String(i).padStart(2, '0');
+    const link = document.createElement('a');
+    link.href = `#heading-${num}`;
+    link.className = 'section-link';
+    link.textContent = `項目 ${i}`;
+    sectionLinks.appendChild(link);
   }
 }
 
@@ -93,6 +109,8 @@ function loadAllTexts(lesson) {
     loadTextFile(files)
       .then(({ text, label }) => {
         heading.textContent = label;
+        const link = sectionLinks.querySelector(`[href="#heading-${num}"]`);
+        if (link) link.textContent = label;
         textarea.value = text;
         textarea.style.height = 'auto';
         textarea.style.height = textarea.scrollHeight + 'px';
