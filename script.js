@@ -1,6 +1,7 @@
 const TOTAL = 10;
 const list = document.getElementById('message-list');
 const sectionLinks = document.getElementById('section-links');
+const navLinks = document.querySelector('.nav-links');
 
 // ナビゲーションボタンのクリック処理
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -14,9 +15,11 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 function showLesson(lesson) {
   list.innerHTML = '';
   if (lesson === 'home') {
+    navLinks.classList.remove('is-hidden');
     sectionLinks.innerHTML = '';
     showHome();
   } else {
+    navLinks.classList.add('is-hidden');
     buildSectionLinks();
     buildBlocks();
     loadAllTexts(lesson);

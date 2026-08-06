@@ -34,6 +34,10 @@ body {
   justify-content: center;
 }
 
+.nav-links.is-hidden {
+  display: none;
+}
+
 .section-links {
   display: flex;
   gap: 6px;
@@ -43,12 +47,19 @@ body {
 }
 
 .section-link {
-  color: #dce1e7;
-  font-size: 0.82rem;
-  text-decoration: underline;
+  padding: 7px 16px;
+  border: 2px solid #7f8c8d;
+  border-radius: 20px;
+  background: transparent;
+  color: #ecf0f1;
+  font-size: 0.9rem;
+  text-decoration: none;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
 }
 
 .section-link:hover {
+  background-color: #3d5166;
+  border-color: #3498db;
   color: #fff;
 }
 
